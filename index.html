@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+    <title>Voxel English Quest 3D by GAFILL 01, 2026</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Mitr', sans-serif; margin: 0; overflow: hidden; background-color: #000; touch-action: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        .ui-layer { position: absolute; z-index: 10; width: 100%; height: 100%; pointer-events: none; }
+        .pointer-events-auto { pointer-events: auto; }
+        /* สไตล์สำหรับ Name Tag 2D */
+        #player-nametag {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 14px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            display: none;
+            z-index: 5;
+            white-space: nowrap;
+        }
+        /* ซ่อน Scrollbar */
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="select-none">
+
+    <!-- Container สำหรับ Three.js -->
+    <div id="canvas-container"></div>
+    <div id="player-nametag">Player</div>
+
+    <!-- UI Layer -->
+    <div class="ui-layer flex flex-col justify-between">
+        
+        <!-- HUD (ซ้ายบน) และ ปุ่ม Home (ขวาบน) -->
+        <div id="hud" class="hidden flex justify-between items-start p-4 w-full">
+            <div class="bg-white/90 rounded-xl p-3 shadow-lg pointer-events-auto border-2 border-orange-400">
+                <div class="text-xl font-bold text-gray-800">คะแนน: <span id="score-display" class="text-orange-500">0</span></div>
+                <div class="text-xl font-bold text-gray-800">ดาว: <span id="star-display" class="text-yellow-500">0</span>/10 ⭐</div>
+            </div>
+            <button id="btn-home" class="pointer-events-auto bg-blue-500 hover:bg-blue-600 text-white rounded-full p-3 shadow-lg transition transform hover:scale-110 border-2 border-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- หน้า Start Screen -->
+        <div id="start-screen" class="absolute inset-0 bg-orange-900/80 flex items-center justify-center pointer-events-auto backdrop-blur-sm transition-opacity duration-500">
+            <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border-4 border-orange-500">
+                <h1 class="text-4xl font-bold text-orange-600 mb-2">Voxel English Quest</h1>
+                <p class="text-gray-600 mb-6">สะสมดาวให้ครบ 10 ดวง ระวังปีศาจกล่องดำ!</p>
+                <input type="text" id="player-name-input" placeholder="พิมพ์ชื่อตัวละครของคุณ..." class="w-full px-4 py-3 rounded-lg border-2 border-gray-300 focus:border-orange-500 focus:outline-none mb-6 text-center text-lg" maxlength="15">
+                <button id="btn-start" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg text-xl transition transform hover:-translate-y-1 shadow-lg">เริ่มเกม</button>
+            </div>
+        </div>
+
+        <!-- หน้าต่างคำถาม (Quiz Modal) -->
+        <div id="quiz-modal" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-auto backdrop-blur-md">
+            <div class="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border-4 border-yellow-400 transform transition-transform scale-95" id="quiz-box">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-blue-600">English Quiz!</h2>
+                    <span class="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-yellow-400">+50 คะแนน / 1 ดาว</span>
+                </div>
+                <p id="question-text" class="text-xl text-gray-800 mb-6 font-semibold min-h-[60px]">Question here?</p>
+                <div id="answers-container" class="grid grid-cols-1 gap-3">
+                    <!-- ปุ่มคำตอบจะถูกสร้างด้วย JS -->
+                </div>
+                <div id="quiz-feedback" class="hidden mt-4 p-3 rounded-lg text-center font-bold text-lg"></div>
+            </div>
+        </div>
+
+        <!-- หน้าต่างยืนยันกลับหน้าแรก (Home Modal) -->
+        <div id="home-modal" class="hidden absolute inset-0 bg-black/70 flex items-center justify-center pointer-events-auto backdrop-blur-sm">
+            <div class="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">หยุดเกมชั่วคราว</h2>
+                <p class="text-gray-600 mb-6">คุณต้องการยอมแพ้และกลับสู่หน้าหลักหรือไม่? (คะแนนจะถูกบันทึก)</p>
+                <div class="flex justify-center gap-4">
+                    <button id="btn-home-cancel" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition">เล่นต่อ</button>
+                    <button id="btn-home-confirm" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition">ยอมแพ้</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- หน้าต่าง Game Over -->
+        <div id="game-over-modal" class="hidden absolute inset-0 bg-red-900/80 flex items-center justify-center pointer-events-auto backdrop-blur-md">
+            <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border-4 border-red-500">
+                <h1 class="text-5xl font-bold text-red-600 mb-2">โดนจับได้!</h1>
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Game Over</h2>
+                <div class="bg-gray-100 rounded-lg p-4 mb-6">
+                    <p class="text-lg text-gray-600">คะแนนรวม: <span id="go-score" class="font-bold text-orange-500 text-2xl">0</span></p>
+                    <p class="text-lg text-gray-600">ดาวที่ได้: <span id="go-stars" class="font-bold text-yellow-500 text-2xl">0</span>/10</p>
+                </div>
+                <button id="btn-restart" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg text-xl transition transform hover:-translate-y-1 shadow-lg">เล่นใหม่</button>
+            </div>
+        </div>
+
+        <!-- หน้าต่าง ชนะ (Victory) -->
+        <div id="victory-modal" class="hidden absolute inset-0 bg-yellow-600/80 flex items-center justify-center pointer-events-auto backdrop-blur-md">
+            <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border-4 border-yellow-400">
+                <h1 class="text-5xl font-bold text-yellow-500 mb-2">ยินดีด้วย!</h1>
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">คุณเรียนจบหลักสูตรแล้ว 🎉</h2>
+                <div class="bg-gray-100 rounded-lg p-4 mb-6">
+                    <p class="text-lg text-gray-600">คะแนนรวม: <span id="vic-score" class="font-bold text-orange-500 text-2xl">0</span></p>
+                    <p class="text-lg text-gray-600">ดาวที่สะสมครบ: <span class="font-bold text-yellow-500 text-2xl">10</span>/10</p>
+                </div>
+                <button id="btn-victory-restart" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg text-xl transition transform hover:-translate-y-1 shadow-lg">เริ่มเกมใหม่</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script ควบคุมเกม -->
+    <script>
+        // --- 1. Web Audio API Synthesizer (ระบบเสียง) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const SoundFX = {
+            playTone: (freq, type, duration, vol = 0.1) => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            },
+            start: () => { // เสียงเริ่มเกม (Arpeggio ขาขึ้น)
+                setTimeout(() => SoundFX.playTone(440, 'square', 0.2), 0);
+                setTimeout(() => SoundFX.playTone(554, 'square', 0.2), 100);
+                setTimeout(() => SoundFX.playTone(659, 'square', 0.4), 200);
+            },
+            score: () => { // เก็บกล่องคะแนน (ติ๊ง!)
+                SoundFX.playTone(880, 'sine', 0.1, 0.2);
+                setTimeout(() => SoundFX.playTone(1760, 'sine', 0.3, 0.2), 50);
+            },
+            quizHit: () => { // ชนกล่องคำถาม (วู๊ป)
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            },
+            correct: () => { // ตอบถูก (วิ้งๆ)
+                SoundFX.playTone(523.25, 'sine', 0.2, 0.2); // C5
+                setTimeout(() => SoundFX.playTone(659.25, 'sine', 0.2, 0.2), 150); // E5
+                setTimeout(() => SoundFX.playTone(783.99, 'sine', 0.4, 0.2), 300); // G5
+            },
+            wrong: () => { // ตอบผิด (แป่ว)
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            },
+            gameOver: () => { // Game over (เสียงต่ำลง)
+                setTimeout(() => SoundFX.playTone(300, 'square', 0.3, 0.2), 0);
+                setTimeout(() => SoundFX.playTone(250, 'square', 0.3, 0.2), 200);
+                setTimeout(() => SoundFX.playTone(200, 'square', 0.6, 0.2), 400);
+            },
+            victory: () => { // ชนะ!
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                    setTimeout(() => SoundFX.playTone(freq, 'square', 0.3, 0.1), i * 150);
+                });
+            }
+        };
+
+        // --- 2. ข้อมูลคำถาม (Quiz Data) ---
+        const quizBank = [
+            { q: "What is the synonym of 'Happy'?", options: ["Sad", "Joyful", "Angry", "Tired"], a: 1 },
+            { q: "Translate to English: 'แมว'", options: ["Dog", "Bird", "Cat", "Fish"], a: 2 },
+            { q: "Which one is a fruit?", options: ["Carrot", "Potato", "Apple", "Onion"], a: 2 },
+            { q: "Opposite of 'Big' is?", options: ["Small", "Large", "Huge", "Giant"], a: 0 },
+            { q: "What color is the sky usually?", options: ["Green", "Blue", "Red", "Yellow"], a: 1 },
+            { q: "A dog _______ (เห่า).", options: ["Meows", "Moo", "Barks", "Roars"], a: 2 },
+            { q: "How many days are in a week?", options: ["5", "6", "7", "8"], a: 2 },
+            { q: "Past tense of 'Go' is?", options: ["Goed", "Gone", "Went", "Going"], a: 2 },
+            { q: "The sun rises in the _______.", options: ["West", "East", "North", "South"], a: 1 },
+            { q: "What do we use to write?", options: ["Eraser", "Ruler", "Pencil", "Book"], a: 2 },
+            { q: "Plural of 'Child' is?", options: ["Childs", "Children", "Childrens", "Childes"], a: 1 },
+            { q: "Which animal is the king of the jungle?", options: ["Tiger", "Elephant", "Lion", "Monkey"], a: 2 }
+        ];
+
+        // --- 3. ตัวแปรสถานะเกม (Game State) ---
+        let gameState = 'START'; // START, PLAYING, PAUSED, QUIZ, GAME_OVER, VICTORY
+        let score = 0;
+        let stars = 0;
+        let playerName = "Player";
+        let targetPos = null; // สำหรับการเดินด้วย Touch/Mouse
+        
+        // --- 4. Setup Three.js ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // ธีม Sunset
+        scene.background = new THREE.Color(0xff7b00);
+        scene.fog = new THREE.Fog(0xff7b00, 20, 80);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        // แสง (Lighting)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffddaa, 0.8);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.left = -50; dirLight.shadow.camera.right = 50;
+        dirLight.shadow.camera.top = 50; dirLight.shadow.camera.bottom = -50;
+        scene.add(dirLight);
+
+        // --- 5. สร้าง World (Voxel Environment) ---
+        // พื้นดิน
+        const groundGeo = new THREE.BoxGeometry(200, 1, 200);
+        const groundMat = new THREE.MeshLambertMaterial({ color: 0x4CAF50 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.position.y = -0.5;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const objectsGroup = new THREE.Group();
+        scene.add(objectsGroup);
+
+        // ฟังก์ชันสุ่มสร้างตึกและต้นไม้
+        function generateEnvironment() {
+            // ล้างของเก่าถ้ามี
+            while(objectsGroup.children.length > 0){ 
+                objectsGroup.remove(objectsGroup.children[0]); 
+            }
+
+            const treeGeoTrunk = new THREE.BoxGeometry(1, 3, 1);
+            const treeMatTrunk = new THREE.MeshLambertMaterial({ color: 0x5D4037 });
+            const treeGeoLeaves = new THREE.BoxGeometry(3, 3, 3);
+            const treeMatLeaves = new THREE.MeshLambertMaterial({ color: 0x2E7D32 });
+
+            const buildGeo = new THREE.BoxGeometry(1, 1, 1); // จะ scale เอา
+            const buildMats = [
+                new THREE.MeshLambertMaterial({ color: 0x795548 }), // Brown
+                new THREE.MeshLambertMaterial({ color: 0x424242 }), // Dark Grey
+                new THREE.MeshLambertMaterial({ color: 0x607D8B })  // Blue Grey
+            ];
+
+            for (let i = 0; i < 60; i++) {
+                const x = (Math.random() - 0.5) * 150;
+                const z = (Math.random() - 0.5) * 150;
+                
+                // เว้นที่ตรงกลางไว้ให้ผู้เล่นเกิด
+                if (Math.abs(x) < 10 && Math.abs(z) < 10) continue;
+
+                if (Math.random() > 0.4) {
+                    // สร้างต้นไม้
+                    const tree = new THREE.Group();
+                    const trunk = new THREE.Mesh(treeGeoTrunk, treeMatTrunk);
+                    trunk.position.y = 1.5;
+                    trunk.castShadow = true;
+                    const leaves = new THREE.Mesh(treeGeoLeaves, treeMatLeaves);
+                    leaves.position.y = 4.5;
+                    leaves.castShadow = true;
+                    tree.add(trunk); tree.add(leaves);
+                    tree.position.set(x, 0, z);
+                    objectsGroup.add(tree);
+                } else {
+                    // สร้างตึก
+                    const w = Math.floor(Math.random() * 4) + 2;
+                    const h = Math.floor(Math.random() * 10) + 3;
+                    const d = Math.floor(Math.random() * 4) + 2;
+                    const mat = buildMats[Math.floor(Math.random() * buildMats.length)];
+                    const b = new THREE.Mesh(buildGeo, mat);
+                    b.scale.set(w, h, d);
+                    b.position.set(x, h/2, z);
+                    b.castShadow = true;
+                    b.receiveShadow = true;
+                    objectsGroup.add(b);
+                }
+            }
+        }
+
+        // --- 6. สร้าง Player (Voxel Humanoid) ---
+        const playerGroup = new THREE.Group();
+        const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1E88E5 }); // เสื้อน้ำเงิน
+        const skinMat = new THREE.MeshLambertMaterial({ color: 0xFFCCBC }); // ผิว
+        const legMat = new THREE.MeshLambertMaterial({ color: 0x37474F }); // กางเกง
+
+        // หัว
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), skinMat);
+        head.position.y = 3.6; head.castShadow = true; playerGroup.add(head);
+        // ตัว
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2, 0.8), bodyMat);
+        body.position.y = 2; body.castShadow = true; playerGroup.add(body);
+        // แขน
+        const armL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2, 0.6), skinMat);
+        armL.position.set(-1, 2, 0); armL.castShadow = true; playerGroup.add(armL);
+        const armR = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2, 0.6), skinMat);
+        armR.position.set(1, 2, 0); armR.castShadow = true; playerGroup.add(armR);
+        // ขา
+        const legL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2, 0.6), legMat);
+        legL.position.set(-0.4, 0, 0); legL.castShadow = true; playerGroup.add(legL);
+        const legR = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2, 0.6), legMat);
+        legR.position.set(0.4, 0, 0); legR.castShadow = true; playerGroup.add(legR);
+
+        scene.add(playerGroup);
+
+        // --- 7. Entities (ศัตรู และ ไอเทม) ---
+        const enemies = [];
+        const items = []; // ทั้งกล่องคะแนนและกล่องคำถาม
+
+        const enemyGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+        const enemyMat = new THREE.MeshLambertMaterial({ color: 0x111111 }); // ดำ
+        const eyeGeo = new THREE.BoxGeometry(0.3, 0.3, 0.1);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // ตาแดง
+
+        const scoreItemMat = new THREE.MeshLambertMaterial({ color: 0xFF9800 }); // ส้ม
+        const quizItemMat = new THREE.MeshLambertMaterial({ color: 0xFFEB3B }); // เหลือง
+        const itemGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        function spawnEnemy() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(enemyGeo, enemyMat);
+            body.position.y = 0.75; body.castShadow = true;
+            const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeL.position.set(-0.3, 1, 0.8);
+            const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeR.position.set(0.3, 1, 0.8);
+            group.add(body); group.add(eyeL); group.add(eyeR);
+            
+            // สุ่มเกิดไกลๆ ผู้เล่น
+            let angle = Math.random() * Math.PI * 2;
+            let dist = 20 + Math.random() * 30;
+            group.position.set(playerGroup.position.x + Math.cos(angle)*dist, 0, playerGroup.position.z + Math.sin(angle)*dist);
+            
+            scene.add(group);
+            enemies.push(group);
+        }
+
+        function spawnItem(type) {
+            const mat = type === 'score' ? scoreItemMat : quizItemMat;
+            const mesh = new THREE.Mesh(itemGeo, mat);
+            mesh.castShadow = true;
+            mesh.position.y = 1.5;
+            
+            let x = (Math.random() - 0.5) * 100;
+            let z = (Math.random() - 0.5) * 100;
+            mesh.position.set(x, 1.5, z);
+            mesh.userData = { type: type };
+            
+            scene.add(mesh);
+            items.push(mesh);
+        }
+
+        // --- 8. Input Control (Keyboard & Touch) ---
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+        
+        window.addEventListener('keydown', (e) => { if(keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+        window.addEventListener('keyup', (e) => { if(keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+        // Raycaster สำหรับคลิก/แตะ เพื่อเดิน
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onPointerDown(event) {
+            if (gameState !== 'PLAYING') return;
+            // คำนวณตำแหน่งเมาส์ 2D
+            let clientX, clientY;
+            if(event.changedTouches) {
+                clientX = event.changedTouches[0].clientX;
+                clientY = event.changedTouches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(ground);
+            if (intersects.length > 0) {
+                targetPos = intersects[0].point;
+            }
+        }
+
+        renderer.domElement.addEventListener('mousedown', onPointerDown);
+        renderer.domElement.addEventListener('touchstart', onPointerDown, {passive: false});
+
+        // --- 9. Game Logic & Loop ---
+        let walkTime = 0;
+        const speed = 0.15;
+        const enemySpeed = 0.04;
+        const clock = new THREE.Clock();
+
+        function updateGame() {
+            if (gameState !== 'PLAYING') return;
+
+            let isWalking = false;
+            let moveVec = new THREE.Vector3();
+
+            // คีย์บอร์ดนำหน้า
+            if (keys.w || keys.ArrowUp) { moveVec.z -= 1; targetPos = null; }
+            if (keys.s || keys.ArrowDown) { moveVec.z += 1; targetPos = null; }
+            if (keys.a || keys.ArrowLeft) { moveVec.x -= 1; targetPos = null; }
+            if (keys.d || keys.ArrowRight) { moveVec.x += 1; targetPos = null; }
+
+            if (moveVec.length() > 0) {
+                moveVec.normalize().multiplyScalar(speed);
+                playerGroup.position.add(moveVec);
+                isWalking = true;
+                // หมุนตัวไปทางที่เดิน
+                const angle = Math.atan2(moveVec.x, moveVec.z);
+                playerGroup.rotation.y = angle;
+            } else if (targetPos) {
+                // เดินไปจุดที่คลิก
+                let dir = new THREE.Vector3().subVectors(targetPos, playerGroup.position);
+                dir.y = 0;
+                if (dir.length() > 0.5) {
+                    dir.normalize().multiplyScalar(speed);
+                    playerGroup.position.add(dir);
+                    isWalking = true;
+                    playerGroup.rotation.y = Math.atan2(dir.x, dir.z);
+                } else {
+                    targetPos = null;
+                }
+            }
+
+            // ขอบเขตแผนที่ (ขังผู้เล่นไว้ไม่ให้ตกโลก)
+            playerGroup.position.x = Math.max(-95, Math.min(95, playerGroup.position.x));
+            playerGroup.position.z = Math.max(-95, Math.min(95, playerGroup.position.z));
+
+            // อนิเมชั่นเดินแกว่งแขนขา
+            if (isWalking) {
+                walkTime += 0.2;
+                armL.rotation.x = Math.sin(walkTime) * 0.5;
+                armR.rotation.x = -Math.sin(walkTime) * 0.5;
+                legL.rotation.x = -Math.sin(walkTime) * 0.5;
+                legR.rotation.x = Math.sin(walkTime) * 0.5;
+                // ตัวเด้งนิดๆ
+                body.position.y = 2 + Math.abs(Math.sin(walkTime*2)) * 0.1;
+                head.position.y = 3.6 + Math.abs(Math.sin(walkTime*2)) * 0.1;
+            } else {
+                armL.rotation.x = 0; armR.rotation.x = 0;
+                legL.rotation.x = 0; legR.rotation.x = 0;
+                body.position.y = 2; head.position.y = 3.6;
+            }
+
+            // อัพเดทกล้อง (Follow Camera สมูทๆ)
+            const camOffset = new THREE.Vector3(0, 10, 15);
+            const targetCamPos = playerGroup.position.clone().add(camOffset);
+            camera.position.lerp(targetCamPos, 0.1);
+            camera.lookAt(playerGroup.position);
+
+            // อัพเดทไอเทม (ลอยหมุนๆ)
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.rotation.y += 0.05;
+                item.position.y = 1.5 + Math.sin(Date.now() * 0.005 + i) * 0.3;
+
+                // ตรวจสอบชนไอเทม
+                if (playerGroup.position.distanceTo(item.position) < 2) {
+                    scene.remove(item);
+                    items.splice(i, 1);
+                    
+                    if (item.userData.type === 'score') {
+                        SoundFX.score();
+                        score += 10;
+                        updateHUD();
+                        spawnItem('score'); // สร้างใหม่ทดแทน
+                    } else if (item.userData.type === 'quiz') {
+                        SoundFX.quizHit();
+                        openQuiz();
+                        // ไม่ต้องสร้างใหม่ทันที ไว้สร้างตอนตอบเสร็จหรือใช้ logic อื่น
+                    }
+                }
+            }
+
+            // อัพเดทศัตรู
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                // เดินตามผู้เล่น
+                const dir = new THREE.Vector3().subVectors(playerGroup.position, enemy.position);
+                dir.y = 0;
+                if(dir.length() > 0) {
+                    dir.normalize();
+                    enemy.position.add(dir.multiplyScalar(enemySpeed));
+                    enemy.lookAt(playerGroup.position);
+                }
+
+                // ตรวจสอบชนศัตรู -> Game Over
+                if (playerGroup.position.distanceTo(enemy.position) < 1.5) {
+                    gameOver();
+                }
+            }
+        }
+
+        // อัพเดทตำแหน่ง Name Tag 2D ให้ลอยบนหัว 3D
+        function updateNameTag() {
+            const tag = document.getElementById('player-nametag');
+            if (gameState === 'START') { tag.style.display = 'none'; return; }
+            
+            tag.style.display = 'block';
+            tag.innerText = playerName;
+
+            // ตำแหน่งหัวผู้เล่น
+            const headPos = playerGroup.position.clone();
+            headPos.y += 5; // สูงกว่าหัวนิดหน่อย
+
+            headPos.project(camera);
+
+            // แปลงพิกัด 3D เป็น 2D หน้าจอ
+            const x = (headPos.x * .5 + .5) * window.innerWidth;
+            const y = (headPos.y * -.5 + .5) * window.innerHeight;
+
+            // ถ้าผู้เล่นอยู่หลังกล้อง ไม่ต้องแสดง
+            if (headPos.z > 1) {
+                tag.style.display = 'none';
+            } else {
+                tag.style.display = 'block';
+                tag.style.left = `${x}px`;
+                tag.style.top = `${y}px`;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateGame();
+            updateNameTag();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- 10. ระบบ UI และ Event Listeners ---
+        const elStartScreen = document.getElementById('start-screen');
+        const elHud = document.getElementById('hud');
+        const elScore = document.getElementById('score-display');
+        const elStar = document.getElementById('star-display');
+        const elQuizModal = document.getElementById('quiz-modal');
+        const elGameOverModal = document.getElementById('game-over-modal');
+        const elHomeModal = document.getElementById('home-modal');
+        const elVictoryModal = document.getElementById('victory-modal');
+
+        function updateHUD() {
+            elScore.innerText = score;
+            elStar.innerText = stars;
+        }
+
+        function resetGameEnv() {
+            score = 0; stars = 0; updateHUD();
+            playerGroup.position.set(0, 0, 0);
+            targetPos = null;
+            
+            // ลบศัตรูและไอเทมเก่า
+            enemies.forEach(e => scene.remove(e)); enemies.length = 0;
+            items.forEach(i => scene.remove(i)); items.length = 0;
+
+            generateEnvironment();
+
+            // เสกของใหม่
+            for(let i=0; i<3; i++) spawnEnemy();
+            for(let i=0; i<5; i++) spawnItem('score');
+            for(let i=0; i<2; i++) spawnItem('quiz'); // เสกกล่องคำถามทีละ 2 กล่อง
+        }
+
+        // เริ่มเกม
+        document.getElementById('btn-start').addEventListener('click', () => {
+            const nameInput = document.getElementById('player-name-input').value.trim();
+            playerName = nameInput || "Player";
+            
+            elStartScreen.style.opacity = '0';
+            setTimeout(() => {
+                elStartScreen.classList.add('hidden');
+                elHud.classList.remove('hidden');
+                resetGameEnv();
+                SoundFX.start();
+                gameState = 'PLAYING';
+            }, 500);
+        });
+
+        // ปุ่ม Home
+        document.getElementById('btn-home').addEventListener('click', () => {
+            if(gameState !== 'PLAYING') return;
+            gameState = 'PAUSED';
+            elHomeModal.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-home-cancel').addEventListener('click', () => {
+            elHomeModal.classList.add('hidden');
+            gameState = 'PLAYING';
+        });
+
+        document.getElementById('btn-home-confirm').addEventListener('click', () => {
+            elHomeModal.classList.add('hidden');
+            elHud.classList.add('hidden');
+            elStartScreen.classList.remove('hidden');
+            elStartScreen.style.opacity = '1';
+            gameState = 'START';
+        });
+
+        // Game Over
+        function gameOver() {
+            gameState = 'GAME_OVER';
+            SoundFX.gameOver();
+            document.getElementById('go-score').innerText = score;
+            document.getElementById('go-stars').innerText = stars;
+            elGameOverModal.classList.remove('hidden');
+            elHud.classList.add('hidden');
+        }
+
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            elGameOverModal.classList.add('hidden');
+            elHud.classList.remove('hidden');
+            resetGameEnv();
+            SoundFX.start();
+            gameState = 'PLAYING';
+        });
+
+        // Victory
+        function checkVictory() {
+            if (stars >= 10) {
+                gameState = 'VICTORY';
+                SoundFX.victory();
+                document.getElementById('vic-score').innerText = score;
+                elVictoryModal.classList.remove('hidden');
+                elHud.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('btn-victory-restart').addEventListener('click', () => {
+            elVictoryModal.classList.add('hidden');
+            elHud.classList.remove('hidden');
+            resetGameEnv();
+            SoundFX.start();
+            gameState = 'PLAYING';
+        });
+
+
+        // --- 11. ระบบคำถาม (Quiz Logic) ---
+        let currentQuestion = null;
+
+        function openQuiz() {
+            gameState = 'QUIZ';
+            // สุ่มคำถาม
+            currentQuestion = quizBank[Math.floor(Math.random() * quizBank.length)];
+            
+            document.getElementById('question-text').innerText = currentQuestion.q;
+            const container = document.getElementById('answers-container');
+            container.innerHTML = '';
+            document.getElementById('quiz-feedback').classList.add('hidden');
+
+            currentQuestion.options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left px-4 py-3 rounded-lg border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 font-semibold text-gray-700 transition";
+                btn.innerText = opt;
+                btn.onclick = () => handleAnswer(index, btn);
+                container.appendChild(btn);
+            });
+
+            elQuizModal.classList.remove('hidden');
+        }
+
+        function handleAnswer(selectedIndex, btnElement) {
+            // ป้องกันกดซ้ำ
+            const buttons = document.getElementById('answers-container').querySelectorAll('button');
+            buttons.forEach(b => b.onclick = null);
+
+            const feedback = document.getElementById('quiz-feedback');
+            feedback.classList.remove('hidden');
+
+            if (selectedIndex === currentQuestion.a) {
+                // ตอบถูก
+                SoundFX.correct();
+                btnElement.classList.replace('border-gray-200', 'border-green-500');
+                btnElement.classList.replace('hover:bg-blue-50', 'bg-green-100');
+                btnElement.classList.add('text-green-700');
+                
+                feedback.className = "mt-4 p-3 rounded-lg text-center font-bold text-lg bg-green-100 text-green-700";
+                feedback.innerText = "Correct! ยอดเยี่ยมมาก รับไปเลย 1 ดาว ⭐";
+                
+                stars++;
+                score += 50;
+                updateHUD();
+            } else {
+                // ตอบผิด
+                SoundFX.wrong();
+                btnElement.classList.replace('border-gray-200', 'border-red-500');
+                btnElement.classList.replace('hover:bg-blue-50', 'bg-red-100');
+                btnElement.classList.add('text-red-700');
+
+                // ไฮไลต์ข้อที่ถูกด้วย
+                const correctBtn = buttons[currentQuestion.a];
+                correctBtn.classList.replace('border-gray-200', 'border-green-500');
+                correctBtn.classList.add('bg-green-50');
+
+                feedback.className = "mt-4 p-3 rounded-lg text-center font-bold text-lg bg-red-100 text-red-700";
+                feedback.innerText = `Oops! คำตอบที่ถูกคือ: ${currentQuestion.options[currentQuestion.a]}`;
+                
+                // เสกศัตรูเพิ่มเป็นการลงโทษนิดหน่อย
+                spawnEnemy(); 
+            }
+
+            // รอ 2 วิ แล้วปิด
+            setTimeout(() => {
+                elQuizModal.classList.add('hidden');
+                
+                // เสกกล่องคำถามใหม่ทดแทน
+                spawnItem('quiz');
+                
+                if (stars >= 10) {
+                    checkVictory();
+                } else {
+                    gameState = 'PLAYING';
+                }
+            }, 2000);
+        }
+
+        // จัดการเมื่อ Resize หน้าจอ
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
